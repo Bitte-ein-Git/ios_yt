@@ -36,7 +36,7 @@ on:
 
       tweak_version:
         description: "The version of the tweak to use. Enter the version manually from dayanch96/YTLite/releases or leave default"
-        default: "5.2b4"
+        default: "5.2b3"
         required: true
         type: string
 
@@ -71,7 +71,7 @@ jobs:
 
     steps:
       - name: Checkout Main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           path: main
           submodules: recursive
@@ -85,16 +85,18 @@ jobs:
         run: |
           ASSET_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/src" | jq -r '.assets[] | select(.name == "src.ipa") | .url')
           if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" == "null" ]; then
-            echo "::error:: src.ipa not found in release tagged 'src'."
+            echo "::error:: src.ipa not found in release tagged 'src'. Create a private draft release with this tag and upload the source IPA."
             exit 1
           fi
           curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/octet-stream" "$ASSET_URL" -o ${{ github.workspace }}/src.ipa
-          
+
           file_type=$(file --mime-type -b ${{ github.workspace }}/src.ipa)
+
           if [[ "$file_type" != "application/x-ios-app" && "$file_type" != "application/zip" ]]; then
-            echo "::error::Validation failed: The file is not a valid IPA."
+            echo "::error::Validation failed: The downloaded file is not a valid IPA. Detected type: $file_type."
             exit 1
           fi
+
 
       - name: Download custom icon
         run: |
@@ -120,7 +122,7 @@ jobs:
 
       - name: Setup Theos
         if: ${{ (inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_demc) && steps.theos.outputs.cache-hit != 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.7
         with:
           repository: theos/theos
           ref: 67db2ab8d950910161730de77c322658ea3e6b44
@@ -140,7 +142,7 @@ jobs:
 
       - name: Install Cyan and dependencies
         run: |
-          pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
+          pipx install --force https://github.com/SpotCompiled/pyzule-rw/archive/main.zip
           pipx inject cyan Pillow
   
       - name: Download YouTube Plus
@@ -161,13 +163,17 @@ jobs:
         if: ${{ inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_demc }}
         run: |
           if [ -d "$THEOS/include/YouTubeHeader" ]; then
+            echo "YouTubeHeader exists. Pulling latest changes..."
             cd $THEOS/include/YouTubeHeader
             git pull
           else
+            echo "YouTubeHeader does not exist. Cloning repository..."
             cd $THEOS/include
             git clone --quiet --depth=1 https://github.com/PoomSmart/YouTubeHeader.git
           fi
+
           if [ "${{ inputs.enable_demc }}" = "true" ]; then
+            echo "Copying YouTubeHeader to YTHeaders..."
             rm -rf "$THEOS/include/YTHeaders"
             cp -r "$THEOS/include/YouTubeHeader" "$THEOS/include/YTHeaders"
           fi
@@ -178,9 +184,11 @@ jobs:
         if: ${{ inputs.enable_youpip || inputs.enable_ytuhd || inputs.enable_yq || inputs.enable_ryd || inputs.enable_demc }}
         run: |
           if [ -d "$THEOS/include/PSHeader" ]; then
+            echo "PSHeader exists. Pulling latest changes..."
             cd $THEOS/include/PSHeader
             git pull
           else
+            echo "PSHeader does not exist. Cloning repository..."
             cd $THEOS/include
             git clone --quiet --depth=1 https://github.com/PoomSmart/PSHeader.git
           fi
@@ -195,9 +203,11 @@ jobs:
 
       - name: Clone YTUHD
         if: ${{ inputs.enable_ytuhd }}
-        run: |
-          cd ${{ github.workspace }}
-          git clone --quiet --depth=1 https://github.com/Tonwalter888/YTUHD.git
+        uses: actions/checkout@v4.1.7
+        with:
+          repository: PoomSmart/YTUHD
+          ref: 0f59b38817d554ab692a0053456319847a6ab1a1
+          path: ${{ github.workspace }}/YTUHD
 
       - name: Clone Return-YouTube-Dislikes
         if: ${{ inputs.enable_ryd }}
@@ -295,11 +305,13 @@ jobs:
       - name: Inject tweaks into IPA
         run: |
           tweaks="ytplus.deb OpenYoutubeSafariExtension.appex"
+
           for f in *.deb; do
             if [ -f "$f" ]; then
               tweaks="$tweaks $f"
             fi
           done
+
           cyan -i src.ipa -o FordyYT_${{ inputs.tweak_version }}.ipa -v "${{ inputs.tweak_version }}" -k icon.png -uwef $tweaks -n "${{ inputs.display_name }}" -b ${{ inputs.bundle_id }}
         
       - name: Create Release
