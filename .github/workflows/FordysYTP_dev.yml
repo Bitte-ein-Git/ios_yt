@@ -11,7 +11,7 @@ permissions:
 # Define build job
 jobs:
   check-and-build:
-    name: Check Updates & Build IPA
+    name: Update / Build IPA
     runs-on: macos-latest
 
     steps:
@@ -33,15 +33,9 @@ jobs:
             exit 1
           fi
 
-          if [ -f "tag.txt" ]; then
+          else
             CURRENT_TAG=$(cat tag.txt)
-          else
             CURRENT_TAG=""
-          fi
-
-          if [ "$LATEST_TAG" == "$CURRENT_TAG" ]; then
-            echo "run_build=false" >> $GITHUB_OUTPUT
-          else
             echo "run_build=true" >> $GITHUB_OUTPUT
             echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
           fi
