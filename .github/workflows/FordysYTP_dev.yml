@@ -1,26 +1,30 @@
-name: "🚀 Auto-Build Fordy's YT+ [DEV]"
+name: "🌀• Auto-Build Fordy's YT+🗿 [DEV]"
 
+# Allow manual triggering
 on:
-  workflow_dispatch:     # Allows manual triggering
+  workflow_dispatch:
 
+# Grant write permissions
 permissions:
-  contents: write        # Allows pushing ytver_dev.txt and creating releases
+  contents: write
 
+# Define build job
 jobs:
   check-and-build:
     name: Check Updates & Build IPA
     runs-on: macos-latest
 
     steps:
+      # Checkout source code
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Verify upstream updates
       - name: Check for new release
         id: check_release
         run: |
-          # Fetch latest release
           LATEST_RELEASE=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/latest")
           LATEST_TAG=$(echo "$LATEST_RELEASE" | jq -r .tag_name)
           
@@ -29,30 +33,25 @@ jobs:
             exit 1
           fi
 
-          # Read local tag
-          if [ -f "ytver_dev.txt" ]; then
-            CURRENT_TAG=$(cat ytver_dev.txt)
+          if [ -f "tag.txt" ]; then
+            CURRENT_TAG=$(cat tag.txt)
           else
             CURRENT_TAG=""
           fi
 
-          # Compare versions
           if [ "$LATEST_TAG" == "$CURRENT_TAG" ]; then
-            echo "No new version found (Current: $LATEST_TAG). Skipping build."
             echo "run_build=false" >> $GITHUB_OUTPUT
           else
-            echo "New version found! ($CURRENT_TAG -> $LATEST_TAG)"
             echo "run_build=true" >> $GITHUB_OUTPUT
             echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
           fi
 
+      # Download and extract IPA
       - name: Download IPA and Extract Version
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Fetch release assets
           ASSETS=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/tags/${{ env.LATEST_TAG }}")
           
-          # Extract IPA URL
           IPA_URL=$(echo "$ASSETS" | jq -r '.assets[] | select(.name | endswith(".ipa")) | .browser_download_url' | head -n 1)
           IPA_NAME=$(echo "$ASSETS" | jq -r '.assets[] | select(.name | endswith(".ipa")) | .name' | head -n 1)
 
@@ -61,27 +60,26 @@ jobs:
             exit 1
           fi
 
-          # Download source IPA
           curl -L -o src.ipa "$IPA_URL"
 
-          # Extract version
           EXTRACTED_VERSION=$(echo "$IPA_NAME" | cut -d'_' -f1)
           echo "EXTRACTED_VERSION=$EXTRACTED_VERSION" >> $GITHUB_ENV
 
+      # Download app icon
       - name: Download custom icon
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Download icon
           icon_url="https://raw.githubusercontent.com/${{ github.repository }}/refs/heads/main/custom/icon.png"
           wget "$icon_url" --no-verbose -O ${{ github.workspace }}/icon.png
 
+      # Setup injection tools
       - name: Install Cyan and dependencies
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Setup Pyzule
           pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
           pipx inject cyan Pillow
 
+      # Initialize Theos
       - name: Setup Theos
         if: steps.check_release.outputs.run_build == 'true'
         uses: actions/checkout@v4
@@ -90,14 +88,13 @@ jobs:
           path: theos
           submodules: recursive
 
+      # Compile CastFix tweak
       - name: Build CastFix Tweak
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Isolate CastFix build
           mkdir -p build_castfix
           cp CastFix/CastFix.x build_castfix/
           
-          # Create Makefile
           cat << 'EOF' > build_castfix/Makefile
           ARCHS = arm64
           TARGET := iphone:clang:latest:13.0
@@ -108,50 +105,47 @@ jobs:
           include $(THEOS_MAKE_PATH)/tweak.mk
           EOF
           
-          # Create plist
           cat << 'EOF' > build_castfix/CastFix.plist
           { Filter = { Bundles = ( "com.google.ios.youtube" ); }; }
           EOF
           
-          # Compile deb
           cd build_castfix
           export THEOS=${{ github.workspace }}/theos
           make package FINALPACKAGE=1
           
-          # Export path
           DEB_FILE=$(ls packages/*.deb | head -n 1)
           echo "DEB_FILE=${{ github.workspace }}/build_castfix/${DEB_FILE}" >> $GITHUB_ENV
 
+      # Inject modifications
       - name: Inject Custom Name, Icon, and Tweak via Cyan
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Inject tweak and modify IPA
-          cyan -i src.ipa -o FordyYT_${{ env.EXTRACTED_VERSION }}.ipa -v "${{ env.EXTRACTED_VERSION }}" -k icon.png -n "YouTube+🗿" -f ${{ env.DEB_FILE }}
+          cyan -i src.ipa -o FordyYT_${{ env.EXTRACTED_VERSION }}-dev.ipa -v "${{ env.EXTRACTED_VERSION }}-dev" -k icon.png -n "YouTube+🗿" -f ${{ env.DEB_FILE }}
           
-      - name: Update ytver_dev.txt
+      # Save tracking tag
+      - name: Update tag.txt
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Save tag
-          echo "${{ env.LATEST_TAG }}-dev" > ytver_dev.txt
+          echo "${{ env.LATEST_TAG }}" > tag.txt
           
-          # Git setup
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Commit tag
-          git add ytver_dev.txt
-          git commit -m "chore: Build/Update FordysYT (DEV): ${{ env.LATEST_TAG }}"
+          git add tag.txt
+          git commit -m "chore: Update YTLiteDiarrhea tracking tag to ${{ env.LATEST_TAG }}"
           git push
 
+      # Publish dev release
       - name: Create Release
         if: steps.check_release.outputs.run_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.EXTRACTED_VERSION }}-dev"
-          name: "YouTube+🗿[DEV] v${{ env.EXTRACTED_VERSION }}"
+          name: "YouTube+🗿 [DEV] v${{ env.EXTRACTED_VERSION }}-dev"
+          prerelease: true
           files: |
             FordyYT_${{ env.EXTRACTED_VERSION }}-dev.ipa
           body: |
             
             - **Upstream Tag:** ${{ env.LATEST_TAG }}
-            - **YouTube Version:** ${{ env.EXTRACTED_VERSION }}
+            - **YouTube Version:** ${{ env.EXTRACTED_VERSION }}-dev
