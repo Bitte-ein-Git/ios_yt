@@ -85,7 +85,6 @@ jobs:
         run: |
           brew install ldid xz
 
-      # Build CastFix tweak
       - name: Build CastFix Tweak
         run: |
           mkdir -p build_castfix
@@ -103,6 +102,18 @@ jobs:
           
           cat << 'EOF' > build_castfix/CastFix.plist
           { Filter = { Bundles = ( "com.google.ios.youtube" ); }; }
+          EOF
+          
+          cat << 'EOF' > build_castfix/control
+          Package: com.heyfordy.castfix
+          Name: CastFix
+          Depends: mobilesubstrate
+          Version: 1.0.0
+          Architecture: iphoneos-arm
+          Description: Fix YouTube Cast Permission
+          Maintainer: heyFordy
+          Author: heyFordy
+          Section: Tweaks
           EOF
           
           cd build_castfix
