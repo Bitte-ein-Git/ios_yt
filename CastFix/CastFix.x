@@ -1,34 +1,47 @@
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 
-// Hook YouTube local network permission
-%hook YTLocalNetworkPermissionController
+// Hook main network reachability controller
+%hook YTNetworkReachabilityController
 
-// Force permission true
-- (BOOL)hasLocalNetworkPermission {
-    return YES;
+// Fake no Wi-Fi for MDX stack
+- (BOOL)isWifi {
+    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
+    return %orig;
 }
 
-// Force granted true
-- (BOOL)isLocalNetworkPermissionGranted {
-    return YES;
+// Fake no Wi-Fi for MDX stack alternative
+- (BOOL)isWiFi {
+    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
+    return %orig;
 }
 
-// Intercept prompt
-- (void)requestLocalNetworkPermissionWithCompletionBlock:(void (^)(BOOL granted))completion {
-    if (completion) {
-        completion(YES);
-    }
+// Fake cellular connection type for MDX stack
+- (int)connectionType {
+    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return 2;
+    return %orig;
 }
 
 %end
 
-// Hook MDX app state
-%hook MDXAppStateMonitor
+// Hook secondary reachability controller
+%hook YTReachabilityController
 
-// Force MDX permission true
-- (BOOL)hasLocalNetworkPermission {
-    return YES;
+// Fake no Wi-Fi for MDX stack
+- (BOOL)isWifi {
+    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
+    return %orig;
+}
+
+// Fake no Wi-Fi for MDX stack alternative
+- (BOOL)isWiFi {
+    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
+    return %orig;
+}
+
+// Fake cellular connection type for MDX stack
+- (int)connectionType {
+    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return 2;
+    return %orig;
 }
 
 %end
