@@ -8,7 +8,7 @@ on:
 permissions:
   contents: write
 
-# Define clean&build job
+# Define build job
 jobs:
   cleanup:
     runs-on: ubuntu-latest
@@ -80,7 +80,7 @@ jobs:
           path: theos
           submodules: recursive
 
-      # Install ldid and packaging tools
+     # Install ldid and packaging tools
       - name: Install build tools
         run: |
           brew install ldid xz
