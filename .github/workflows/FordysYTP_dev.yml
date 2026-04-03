@@ -1,6 +1,6 @@
 name: "🌀• Auto-Build Fordy's YT+🗿 [DEV]"
 
-# Allow manual triggering
+# Manual trigger
 on:
   workflow_dispatch:
 
@@ -10,20 +10,27 @@ permissions:
 
 # Define build job
 jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Bitte-ein-Git/action_clear-runs@main
+
   check-and-build:
-    name: Update / Build IPA
+    name: Check Updates & Build IPA
     runs-on: macos-latest
 
     steps:
-      # Checkout source code
+      # Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Verify upstream updates
-      - name: Check for new release
-        id: check_release
+      # Fetch upstream release
+      - name: Fetch latest release
         run: |
           LATEST_RELEASE=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/latest")
           LATEST_TAG=$(echo "$LATEST_RELEASE" | jq -r .tag_name)
@@ -33,16 +40,10 @@ jobs:
             exit 1
           fi
 
-          else
-            CURRENT_TAG=$(cat tag.txt)
-            CURRENT_TAG=""
-            echo "run_build=true" >> $GITHUB_OUTPUT
-            echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
-          fi
+          echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
       # Download and extract IPA
       - name: Download IPA and Extract Version
-        if: steps.check_release.outputs.run_build == 'true'
         run: |
           ASSETS=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/tags/${{ env.LATEST_TAG }}")
           
@@ -59,32 +60,28 @@ jobs:
           EXTRACTED_VERSION=$(echo "$IPA_NAME" | cut -d'_' -f1)
           echo "EXTRACTED_VERSION=$EXTRACTED_VERSION" >> $GITHUB_ENV
 
-      # Download app icon
+      # Download custom icon
       - name: Download custom icon
-        if: steps.check_release.outputs.run_build == 'true'
         run: |
           icon_url="https://raw.githubusercontent.com/${{ github.repository }}/refs/heads/main/custom/icon.png"
           wget "$icon_url" --no-verbose -O ${{ github.workspace }}/icon.png
 
-      # Setup injection tools
+      # Install dependencies
       - name: Install Cyan and dependencies
-        if: steps.check_release.outputs.run_build == 'true'
         run: |
           pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
           pipx inject cyan Pillow
 
-      # Initialize Theos
+      # Setup Theos
       - name: Setup Theos
-        if: steps.check_release.outputs.run_build == 'true'
         uses: actions/checkout@v4
         with:
           repository: theos/theos
           path: theos
           submodules: recursive
 
-      # Compile CastFix tweak
+      # Build CastFix tweak
       - name: Build CastFix Tweak
-        if: steps.check_release.outputs.run_build == 'true'
         run: |
           mkdir -p build_castfix
           cp CastFix/CastFix.x build_castfix/
@@ -112,26 +109,11 @@ jobs:
 
       # Inject modifications
       - name: Inject Custom Name, Icon, and Tweak via Cyan
-        if: steps.check_release.outputs.run_build == 'true'
         run: |
           cyan -i src.ipa -o FordyYT_${{ env.EXTRACTED_VERSION }}-dev.ipa -v "${{ env.EXTRACTED_VERSION }}-dev" -k icon.png -n "YouTube+🗿" -f ${{ env.DEB_FILE }}
-          
-      # Save tracking tag
-      - name: Update tag.txt
-        if: steps.check_release.outputs.run_build == 'true'
-        run: |
-          echo "${{ env.LATEST_TAG }}" > tag.txt
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          git add tag.txt
-          git commit -m "chore: Update YTLiteDiarrhea tracking tag to ${{ env.LATEST_TAG }}"
-          git push
 
       # Publish dev release
       - name: Create Release
-        if: steps.check_release.outputs.run_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.EXTRACTED_VERSION }}-dev"
