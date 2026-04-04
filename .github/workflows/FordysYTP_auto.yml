@@ -2,11 +2,11 @@ name: "🌀• Auto-Build Fordy's YT+🗿"
 
 on:
   schedule:
-    - cron: '0 12 * * *' # Runs daily at 12:00 PM (noon) UTC
+    - cron: '0 12 * * *' # Runs daily at 12:00 UTC
   workflow_dispatch:     # Allows manual triggering
 
 permissions:
-  contents: write        # Important: Allows pushing tag.txt and creating releases
+  contents: write        # Allows pushing tag and creating releases
 
 jobs:
   check-and-build:
@@ -22,8 +22,8 @@ jobs:
       - name: Check for new release
         id: check_release
         run: |
-          # Fetch the latest release tag from diarrhea3/YTLiteDiarrhea
-          LATEST_RELEASE=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/latest")
+          # Fetch latest release tag via GitHub API
+          LATEST_RELEASE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/latest")
           LATEST_TAG=$(echo "$LATEST_RELEASE" | jq -r .tag_name)
           
           if [ "$LATEST_TAG" == "null" ] || [ -z "$LATEST_TAG" ]; then
@@ -31,7 +31,7 @@ jobs:
             exit 1
           fi
 
-          # Read local tag if tag.txt exists
+          # Read local tag
           if [ -f "tag.txt" ]; then
             CURRENT_TAG=$(cat tag.txt)
           else
@@ -52,9 +52,9 @@ jobs:
         if: steps.check_release.outputs.run_build == 'true'
         run: |
           # Fetch all assets of the latest release
-          ASSETS=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/tags/${{ env.LATEST_TAG }}")
+          ASSETS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/tags/${{ env.LATEST_TAG }}")
           
-          # Find the first file ending with .ipa
+          # Find the first ipa file
           IPA_URL=$(echo "$ASSETS" | jq -r '.assets[] | select(.name | endswith(".ipa")) | .browser_download_url' | head -n 1)
           IPA_NAME=$(echo "$ASSETS" | jq -r '.assets[] | select(.name | endswith(".ipa")) | .name' | head -n 1)
 
@@ -66,8 +66,7 @@ jobs:
           echo "Downloading $IPA_NAME..."
           curl -L -o src.ipa "$IPA_URL"
 
-          # Extract the version from the filename (e.g., 21.08.3_YouTubePlus_5.2b4.ipa -> 21.08.3)
-          # Cuts the string at the first underscore (_)
+          # Extract version from filename
           EXTRACTED_VERSION=$(echo "$IPA_NAME" | cut -d'_' -f1)
           
           echo "Extracted Version: $EXTRACTED_VERSION"
@@ -76,32 +75,34 @@ jobs:
       - name: Download custom icon
         if: steps.check_release.outputs.run_build == 'true'
         run: |
+          # Download custom icon from repo
           icon_url="https://raw.githubusercontent.com/${{ github.repository }}/refs/heads/main/custom/icon.png"
           wget "$icon_url" --no-verbose -O ${{ github.workspace }}/icon.png
 
       - name: Install Cyan and dependencies
         if: steps.check_release.outputs.run_build == 'true'
         run: |
+          # Install pipx dependencies
           pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
           pipx inject cyan Pillow
 
       - name: Inject Custom Name and Icon via Cyan
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Apply custom icon, custom name, and the extracted app version
+          # Apply custom icon and name
           cyan -i src.ipa -o FordyYT_${{ env.EXTRACTED_VERSION }}.ipa -v "${{ env.EXTRACTED_VERSION }}" -k icon.png -n "YouTube+🗿"
           
       - name: Update tag.txt
         if: steps.check_release.outputs.run_build == 'true'
         run: |
-          # Save the new tag to the file
+          # Save new tag
           echo "${{ env.LATEST_TAG }}" > tag.txt
           
-          # Configure Git user for the automated commit
+          # Configure Git user
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Add changes and commit
+          # Commit and push
           git add tag.txt
           git commit -m "chore: Update YTLiteDiarrhea tracking tag to ${{ env.LATEST_TAG }}"
           git push
