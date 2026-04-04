@@ -1,47 +1,43 @@
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
-// Hook main network reachability controller
-%hook YTNetworkReachabilityController
+// Bypass YouTube's custom local network permission blocker
+%hook YTLocalNetworkAccessChecker
 
-// Fake no Wi-Fi for MDX stack
-- (BOOL)isWifi {
-    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
-    return %orig;
+- (BOOL)hasLocalNetworkAccess {
+    return YES;
 }
 
-// Fake no Wi-Fi for MDX stack alternative
-- (BOOL)isWiFi {
-    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
-    return %orig;
-}
-
-// Fake cellular connection type for MDX stack
-- (int)connectionType {
-    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return 2;
-    return %orig;
+- (void)checkLocalNetworkAccessWithCompletion:(void(^)(BOOL))completion {
+    if (completion) {
+        completion(YES);
+    }
 }
 
 %end
 
-// Hook secondary reachability controller
-%hook YTReachabilityController
+// Fallback for alternate MDX permission checker classes
+%hook MDXLocalNetworkPermission
 
-// Fake no Wi-Fi for MDX stack
-- (BOOL)isWifi {
-    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
-    return %orig;
+- (BOOL)isGranted { 
+    return YES; 
 }
 
-// Fake no Wi-Fi for MDX stack alternative
-- (BOOL)isWiFi {
-    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return NO;
-    return %orig;
+- (BOOL)hasPrompted { 
+    return YES; 
 }
 
-// Fake cellular connection type for MDX stack
-- (int)connectionType {
-    if ([[NSThread callStackSymbols].description containsString:@"MDX"]) return 2;
-    return %orig;
+%end
+
+// Cleanly fake cellular connection exclusively for the Google Cast SDK
+%hook GCKNNetworkReachability
+
+- (NSInteger)currentNetworkStatus {
+    return 2; 
+}
+
+- (BOOL)isReachableViaWiFi {
+    return NO;
 }
 
 %end
