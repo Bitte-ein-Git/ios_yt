@@ -1,14 +1,11 @@
 name: "🌀• Auto-Build Fordy's YT+🗿 [DEV]"
 
-# Manual trigger
 on:
-  workflow_dispatch:
+  workflow_dispatch:     # Manual trigger
 
-# Grant write permissions
 permissions:
-  contents: write
+  contents: write        # Grant write permissions
 
-# Define build job
 jobs:
   cleanup:
     runs-on: ubuntu-latest
@@ -23,16 +20,15 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      # Checkout repository
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Fetch upstream release
       - name: Fetch latest release
         run: |
-          LATEST_RELEASE=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/latest")
+          # Fetch latest release via GitHub API
+          LATEST_RELEASE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/latest")
           LATEST_TAG=$(echo "$LATEST_RELEASE" | jq -r .tag_name)
           
           if [ "$LATEST_TAG" == "null" ] || [ -z "$LATEST_TAG" ]; then
@@ -42,11 +38,12 @@ jobs:
 
           echo "LATEST_TAG=$LATEST_TAG" >> $GITHUB_ENV
 
-      # Download and extract IPA
       - name: Download IPA and Extract Version
         run: |
-          ASSETS=$(curl -s "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/tags/${{ env.LATEST_TAG }}")
+          # Fetch assets of latest release
+          ASSETS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/diarrhea3/YTLiteDiarrhea/releases/tags/${{ env.LATEST_TAG }}")
           
+          # Find ipa file
           IPA_URL=$(echo "$ASSETS" | jq -r '.assets[] | select(.name | endswith(".ipa")) | .browser_download_url' | head -n 1)
           IPA_NAME=$(echo "$ASSETS" | jq -r '.assets[] | select(.name | endswith(".ipa")) | .name' | head -n 1)
 
@@ -57,22 +54,22 @@ jobs:
 
           curl -L -o src.ipa "$IPA_URL"
 
+          # Extract version from filename
           EXTRACTED_VERSION=$(echo "$IPA_NAME" | cut -d'_' -f1)
           echo "EXTRACTED_VERSION=$EXTRACTED_VERSION" >> $GITHUB_ENV
 
-      # Download custom icon
       - name: Download custom icon
         run: |
+          # Download icon from repo
           icon_url="https://raw.githubusercontent.com/${{ github.repository }}/refs/heads/main/custom/icon.png"
           wget "$icon_url" --no-verbose -O ${{ github.workspace }}/icon.png
 
-      # Install dependencies
       - name: Install Cyan and dependencies
         run: |
+          # Install pipx dependencies
           pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
           pipx inject cyan Pillow
 
-      # Setup Theos
       - name: Setup Theos
         uses: actions/checkout@v4
         with:
@@ -80,13 +77,14 @@ jobs:
           path: theos
           submodules: recursive
 
-     # Install ldid and packaging tools
       - name: Install build tools
         run: |
+          # Install ldid and packaging tools
           brew install ldid xz
 
       - name: Build CastFix Tweak
         run: |
+          # Setup build directory
           mkdir -p build_castfix
           cp CastFix/CastFix.x build_castfix/
           
@@ -116,6 +114,7 @@ jobs:
           Section: Tweaks
           EOF
           
+          # Compile tweak
           cd build_castfix
           export THEOS=${{ github.workspace }}/theos
           make package FINALPACKAGE=1
@@ -123,12 +122,11 @@ jobs:
           DEB_FILE=$(ls packages/*.deb | head -n 1)
           echo "DEB_FILE=${{ github.workspace }}/build_castfix/${DEB_FILE}" >> $GITHUB_ENV
 
-      # Inject modifications
       - name: Inject Custom Name, Icon, and Tweak via Cyan
         run: |
+          # Apply modifications
           cyan -i src.ipa -o FordyYT_${{ env.EXTRACTED_VERSION }}-dev.ipa -v "${{ env.EXTRACTED_VERSION }}-dev" -k icon.png -n "YouTube+🗿" -f ${{ env.DEB_FILE }}
 
-      # Publish dev release
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
